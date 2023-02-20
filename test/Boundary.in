@@ -1,0 +1,19 @@
+Pcp_File_Version=5
+*** BLOCK J: BOUNDARY INFORMATION *********************************************
+    NumBP     NObs  SeepF  FreeD DrainF  qQWLF
+        0        0      f      f      f      f
+ Interp H/Flux H/Flx1  Atm/H Seep/H Atm/WL Atm/SF   Snow
+      f      f      f      f      f      f      f      f
+Gradient SubDrip SurfDrip SeepFace TriggIrrig   WellBC
+      f      f      f      f      f      f      f      f
+Node Number Array
+      0 
+Width Array
+      0 
+Length of soil surface associated with transpiration
+              0
+Number of Flowing points and their indeces
+    0
+*** BLOCK J-E: Heat transport boundary conditions *******************************
+KodTB(1),KodTB(2),.....,KodTB(NumBP)
+*** End of input file 'BOUNDARY.IN' *******************************************

@@ -1,0 +1,205 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jan  7 22:21:43 2023
+
+@author: toru1
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from utils_Hydrus import GetLines
+
+class Nod_Inf(GetLines):
+    def __init__(self, CASENAME):
+        self.CASENAME = CASENAME
+        self.FileName = 'HYDRUS1D.DAT'
+        self.skiplines = 0
+        self.fopen()
+        params = [line.split('=') for line in self.lines]
+        for p in params:
+            if p[0] == 'PrintTimes':
+                self.nPrintTime = int(p[1])
+            elif p[0] == 'NumberOfNodes':
+                self.nnode = int(p[1])
+        
+        self.FileName = 'Nod_Inf.out'
+        self.HeaderLine = 6
+        self.UnitLine = 7
+        self.skiplines = 4
+        self.fopen()
+
+        self.readHeader()
+
+        nskip = 9
+        self.nrows = self.nnode+nskip
+        self.data = np.array([
+                    [line.split() for line in self.lines[nskip+n*self.nrows:(n+1)*self.nrows]]
+                    for n in range(self.nPrintTime)],
+                dtype=float)
+        self.time = np.array([self.lines[3+n*self.nrows].split()[1]
+                              for n in range(self.nPrintTime)], dtype=float)
+        self.depth = self.data[0, :, 1]
+
+        
+    def GetData(self, j):
+        return self.data[:, :, j].T
+    
+    def plot(self, j, i, ax=None, depthmin=None, step=1):
+        if ax==None:
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        # for i in range(0, self.nPrintTime, step):
+        ax.plot(self.data[i, :, j], self.depth,
+                label='{:6d} day'.format(int(self.time[i])))
+        ax.set_ylabel(self.header[1]+self.unit[0])
+        try:
+            ax.set_xlabel(self.header[j]+self.unit[j-1]) 
+        except:
+            ax.set_xlabel(self.header[j])
+        if depthmin == None:
+            depthmin = -self.nnode
+        ax.set_ylim(depthmin, 0)
+        ax.legend(bbox_to_anchor=[1, 1])
+        return ax
+    
+    def heatmap(self, j, header, ax=None, vmin=None, vmax=None):
+        if ax==None:
+            fig, ax = plt.subplots()
+        c = ax.pcolormesh(np.linspace(0, 10950, self.nPrintTime),
+                          np.linspace(0, -self.nnode+1, self.nnode),
+                          self.data[:, :, j].T,
+                          cmap='RdBu', vmin=vmin, vmax=vmax)
+        fig.colorbar(c, ax=ax)
+        ax.set_title(header)
+        ax.set_ylabel('Depth [{}]'.format(self.unit_L))
+        ax.set_xlabel('Time [{}]'.format(self.unit_T))
+        return ax
+
+
+class Obs_Node(GetLines):
+    def __init__(self, CASENAME):
+        self.FileName = 'Obs_Node.out'
+        self.CASENAME = CASENAME
+        self.HeaderLine = 2
+        self.DataLine = 3
+        self.skiplines = 8
+        self.fopen()
+
+        nValues = 4
+        data = np.array([line.split() for line in self.lines[self.DataLine:-2]],
+                        dtype=float)
+        self.data = np.split(data, list(range(1, data[0].size, nValues)), axis=1)
+        self.time = self.data[0][:, 0]
+        self.nNode = self.lines[0].replace('(', ' ').replace(')', ' ').split()
+        self.header = self.lines[self.HeaderLine].split()[:nValues+1]
+        
+    def GetData(self, j):
+        data = [d[:, j] for d in self.data[1:]]
+        return data
+
+    def plot(self, j, i, label=None, timemax=None, ax=None):
+        if ax==None:
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        if label==None:
+            label=self.nNode[2*i+1]+self.unit_L
+        ax.plot(self.time, self.data[i+1][:, j], label=label)
+        ax.set_ylabel(self.header[j+1])
+        ax.set_xlabel(self.header[0]+' '+self.unit_T)
+        if timemax == None:
+            timemax = self.time.max()
+        ax.set_xlim(0, timemax)
+        ax.legend()
+        return ax
+
+class Balance(GetLines):
+    def __init__(self, CASENAME):
+        self.CASENAME = CASENAME
+        self.FileName = 'HYDRUS1D.DAT'
+        self.skiplines = 0
+        self.fopen()
+        params = [line.split('=') for line in self.lines]
+        for p in params:
+            if p[0] == 'PrintTimes':
+                self.nPrintTime = int(p[1])
+                
+        self.FileName = 'Balance.out'
+        self.skiplines = 4
+        self.fopen()
+
+
+        nskip = 7
+        self.nnode = 14
+        self.nrows = self.nnode+nskip
+        while True:
+            try:
+                data =[[[line[:9], line[9:16], line[19:32]] 
+                        for line in self.lines[nskip+n*self.nrows:(n+1)*self.nrows]]
+                       for n in range(3, self.nPrintTime)]
+                self.data = np.array([[d[2] for d in ds] for ds in data], dtype=float)
+                break
+            except:
+                del self.lines[0]
+                self.skiplines += 1
+        
+        self.header = [d[0] for d in data[0]]
+        unit = [d[1] for d in data[0]]
+        self.unit = [s.replace('L', self.unit_L)
+                     .replace('T', self.unit_T)
+                     .replace('M', self.unit_M)
+                     .replace('V', self.unit_V) for s in unit]
+        self.time = np.array([self.lines[3+n*self.nrows].split()[2]
+                              for n in range(3, self.nPrintTime)], dtype=float)
+
+    def GetData(self, j):
+        return self.data[:, j].T
+    
+    def plot(self, j, ax=None):
+        if ax==None:
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        ax.plot(self.time, self.data[:, j])
+        ax.set_xlabel('time '+self.unit_T)
+        try:
+            ax.set_ylabel(self.header[j]+self.unit[j]) 
+        except:
+            ax.set_ylabel(self.header[j])
+        ax.legend()
+        return ax
+
+class T_Level(GetLines):
+    def __init__(self, CASENAME):
+        self.FileName = 'T_Level.out'
+        self.CASENAME = CASENAME
+        self.HeaderLine = 0
+        self.UnitLine = 1
+        self.DataLine = 3
+        self.skiplines = 6
+        self.fopen()
+
+        self.readHeader()
+        self.readData()
+
+
+class solute1(GetLines):
+    def __init__(self, CASENAME):
+        self.FileName = 'solute1.out'
+        self.CASENAME = CASENAME
+        self.HeaderLine = 0
+        self.UnitLine = 1
+        self.DataLine = 2
+        self.skiplines = 2
+        self.fopen()
+
+        self.readHeader()
+        self.readData()
+
+
+class ATMOSPH(GetLines):
+    def __init__(self, CASENAME):
+        self.FileName = 'ATMOSPH.in'
+        self.CASENAME = CASENAME
+        self.HeaderLine = 0
+        self.DataLine = 1
+        self.skiplines = 10
+        self.fopen()
+
+        self.header = self.lines[self.HeaderLine].split()
+        self.readData()
