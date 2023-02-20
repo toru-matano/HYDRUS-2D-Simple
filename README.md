@@ -1,1 +1,1 @@
-# HYDRUS-2D-Simple
+# HYDRUS:2D-Simple-InputsGenerator
